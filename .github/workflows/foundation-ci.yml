@@ -1,0 +1,31 @@
+name: Foundation CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate repository invariants
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check apps/web-prototype/app.js
+          node --check apps/web-prototype/matrix-adapter.js
+
+      - name: Reject obvious committed secrets
+        shell: bash
+        run: |
+          if grep -RInE --exclude-dir=.git --exclude='.env.example' \
+            '(BEGIN (RSA|EC|OPENSSH) PRIVATE KEY|aws_secret_access_key[[:space:]]*=|sk_live_[A-Za-z0-9]+)' .; then
+            echo "Potential secret detected"
+            exit 1
+          fi
