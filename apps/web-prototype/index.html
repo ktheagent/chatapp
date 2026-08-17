@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Relay Messenger Prototype</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">R</div>
+      <h1>Relay</h1>
+      <p>Africa-first. Globally ready.</p>
+      <nav>
+        <button class="active" data-view="chats">Chats</button>
+        <button data-view="privacy">Privacy</button>
+        <button data-view="business">Business</button>
+      </nav>
+    </aside>
+
+    <main>
+      <section id="chats" class="view">
+        <header>
+          <div><small>Private conversation</small><h2>Ama K. <span>@ama</span></h2></div>
+          <div class="status">Number hidden</div>
+        </header>
+        <div class="notice">This prototype does not claim real E2EE. Production encryption will come from a maintained Matrix SDK.</div>
+        <div id="messages" class="messages"></div>
+        <form id="composer" class="composer">
+          <input id="messageInput" placeholder="Message Ama" autocomplete="off" />
+          <button type="submit">Send</button>
+        </form>
+      </section>
+
+      <section id="privacy" class="view hidden">
+        <small>Your controls</small>
+        <h2>Privacy without digging through menus.</h2>
+        <div class="grid">
+          <article><h3>Low Data Mode</h3><p>Automatic, or Extreme Saver for expensive or unstable connections.</p><select id="dataMode"><option>Automatic</option><option>Extreme Saver</option><option>Standard</option></select></article>
+          <article><h3>Privacy Profile</h3><p >Assign audience-based rules.</p><div id="profiles" class="pills"></div></article>
+          <article><h3>Phone visibility</h3><p>Your Relay username survives a SIM change.</p><select id="phoneVisibility"><option>Nobody</option><option>Contacts</option><option>Everyone</option></select></article>
+          <article><h3>Account Protection</h3><p>Restrictions must show a reason and appeal path.</p><button id="appeal">Request review</button><span id="appealStatus"></span></article>
+        </div>
+      </section>
+
+      <section id="business" class="view hidden">
+        <small>Relay Business</small>
+        <h2>Chat, customer context, invoices and payment requests in one place.</h2>
+        <p>This is an architecture preview. CRM, team inbox, and payment services are nexter milestones.</p>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
