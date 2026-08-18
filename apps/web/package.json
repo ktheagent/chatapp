@@ -1,0 +1,20 @@
+{
+  "name": "relay-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "matrix-js-sdk": "42.1.0"
+  },
+  "devDependencies": {
+    "vite": "8.2.1"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
