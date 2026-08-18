@@ -1,0 +1,29 @@
+name: Matrix E2EE Browser Acceptance
+
+on:
+  push:
+    paths:
+      - "apps/web/**"
+      - "scripts/run-e2ee-browser-ci.sh"
+      - ".github/workflows/matrix-e2ee-browser.yml"
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - "scripts/run-e2ee-browser-ci.sh"
+      - ".github/workflows/matrix-e2ee-browser.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  e2ee-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Run real Matrix E2EE browser acceptance
+        run: bash scripts/run-e2ee-browser-ci.sh
