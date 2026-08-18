@@ -1,0 +1,56 @@
+name: Matrix Homeserver Smoke
+
+on:
+  push:
+    paths:
+      - "infrastructure/**"
+      - ".github/workflows/matrix-smoke.yml"
+  pull_request:
+    paths:
+      - "infrastructure/**"
+      - ".github/workflows/matrix-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  synapse-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Create Synapse data volume
+        run: docker volume create relay-synapse-ci
+
+      - name: Generate Synapse configuration
+        run: |
+          docker run --rm \
+            -v relay-synapse-ci:/data \
+            -e SYNAPSE_SERVER_NAME=localhost \
+            -e SYNAPSE_REPORT_STATS=no \
+            matrixdotorg/synapse:v1.158.0 generate
+
+      - name: Start Synapse
+        run: |
+          docker run -d --name relay-synapse \
+            -v relay-synapse-ci:/data \
+            -p 8008:8008 \
+            matrixdotorg/synapse:v1.158.0
+
+      - name: Wait for Matrix client API
+        shell: bash
+        run: |
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:8008/_matrix/client/versions > versions.json; then
+              cat versions.json
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs relay-synapse
+          exit 1
+
+      - name: Show Synapse logs on failure
+        if: failure()
+        run: docker logs relay-synapse || true
