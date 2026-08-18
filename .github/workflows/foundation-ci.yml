@@ -11,20 +11,34 @@ jobs:
   foundation:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          package-manager-cache: false
 
       - name: Validate repository invariants
         run: python3 -m unittest discover -s tests -v
 
-      - name: Check JavaScript syntax
+      - name: Check prototype JavaScript syntax
         run: |
           node --check apps/web-prototype/app.js
           node --check apps/web-prototype/matrix-adapter.js
 
+      - name: Install Matrix web dependencies
+        working-directory: apps/web
+        run: npm install --no-audit --no-fund
+
+      - name: Build Matrix web client
+        working-directory: apps/web
+        run: npm run build
+
       - name: Reject obvious committed secrets
         shell: bash
         run: |
-          if grep -RInE --exclude-dir=.git --exclude='.env.example' \
+          if grep -RInE --exclude-dir=.git --exclude-dir=node_modules --exclude='.env.example' \
             '(BEGIN (RSA|EC|OPENSSH) PRIVATE KEY|aws_secret_access_key[[:space:]]*=|sk_live_[A-Za-z0-9]+)' .; then
             echo "Potential secret detected"
             exit 1
