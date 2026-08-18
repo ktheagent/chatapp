@@ -71,6 +71,7 @@ jobs:
           exit 1
 
       - name: Create Alice and Bob test accounts
+        id: accounts
         env:
           TEST_PASSWORD: RelayCi-Only-Password-42!
         shell: bash
@@ -117,6 +118,7 @@ jobs:
           test "$bob_code" -eq 0
 
       - name: Exchange and decrypt a real encrypted message
+        id: e2ee_test
         working-directory: apps/web
         env:
           MATRIX_BASE_URL: http://127.0.0.1:8008
@@ -148,27 +150,43 @@ jobs:
 
       - name: Publish sanitized E2EE result to repository
         if: always() && github.event_name == 'push'
+        env:
+          ACCOUNTS_OUTCOME: ${{ steps.accounts.outcome }}
+          E2EE_OUTCOME: ${{ steps.e2ee_test.outcome }}
         shell: bash
         run: |
           mkdir -p ci
 
           if [ -f apps/web/e2ee-result.json ]; then
             cp apps/web/e2ee-result.json ci/e2ee-last-result.json
-          elif [ -f account-result.json ]; then
+          else
             python3 - <<'PY'
-          import json
+          import json, os, re
           from pathlib import Path
-          data = json.loads(Path("account-result.json").read_text())
+
+          result = {
+              "ok": False,
+              "stage": "pre-test-result",
+              "accountsOutcome": os.environ.get("ACCOUNTS_OUTCOME", "unknown"),
+              "e2eeOutcome": os.environ.get("E2EE_OUTCOME", "unknown"),
+          }
+
+          account_path = Path("account-result.json")
+          if account_path.exists():
+              result["accountResult"] = json.loads(account_path.read_text())
+
+          output_path = Path("apps/web/e2ee-output.txt")
+          if output_path.exists():
+              text = output_path.read_text(errors="replace")
+              text = text.replace("RelayCi-Only-Password-42!", "[redacted]")
+              text = re.sub(r'(?i)(access[_-]?token["=: ]+)[^\s,"}]+', r'\1[redacted]', text)
+              lines = [line[:500] for line in text.splitlines() if line.strip()]
+              result["startupOutputTail"] = lines[-20:]
+
           Path("ci/e2ee-last-result.json").write_text(
-              json.dumps({
-                  "ok": False,
-                  "stage": "account-creation",
-                  "accountResult": data,
-              }, indent=2) + "\n"
+              json.dumps(result, indent=2) + "\n"
           )
           PY
-          else
-            printf '%s\n' '{"ok":false,"stage":"workflow-before-account-result"}' > ci/e2ee-last-result.json
           fi
 
           python3 - <<'PY'
@@ -176,6 +194,8 @@ jobs:
           from pathlib import Path
           p = Path("ci/e2ee-last-result.json")
           data = json.loads(p.read_text())
+          data["accountsOutcome"] = os.environ.get("ACCOUNTS_OUTCOME", data.get("accountsOutcome", "unknown"))
+          data["e2eeOutcome"] = os.environ.get("E2EE_OUTCOME", data.get("e2eeOutcome", "unknown"))
           data["sourceCommit"] = os.environ["GITHUB_SHA"]
           data["workflowRun"] = os.environ["GITHUB_RUN_ID"]
           p.write_text(json.dumps(data, indent=2) + "\n")
