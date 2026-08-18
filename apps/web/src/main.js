@@ -1,138 +1,103 @@
 import { createClient } from "matrix-js-sdk";
 import "./styles.css";
 
-const DEFAULT_HOMESERVER = import.meta.env.VITE_MATRIX_HOMESERVER_URL || "http://localhost:8008";
-const SESSION_KEY = "relay.matrix.session.v1";
-let client = null;
-let activeRoomId = null;
-
 const app = document.querySelector("#app");
-const esc = (v = "") => String(v).replace(/[&<">']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+const KEY = "relay.matrix.session.v1";
+const home = import.meta.env.VITE_MATRIX_HOMESERVER_URL || "http://localhost:8008";
+let mx, roomId;
 
-function saveSession(s) { localStorage.setItem(SESSION_KEY, JSON.stringify(s)); }
-function loadSession() {
-  try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); }
-  catch { return null; }
+const esc = (s="") => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const load = () => { try { return JSON.parse(localStorage.getItem(KEY)); } catch { return null; } };
+const save = s => localStorage.setItem(KEY, JSON.stringify(s));
+const clear = () => localStorage.removeItem(KEY);
+
+function login(error="") {
+  app.innerHTML = `<main class="auth"><section class="card">
+    <div class="brand">R</div><p class="eyebrow">Relay Messenger</p>
+    <h1>Private messaging for real-world networks.</h1>
+    <p class="muted">Development client using a real Matrix SDK.</p>
+    <form id="login"><label>Homeserver<input id="hs" type="url" value="${esc(home)}" required></label>
+    <label>Matrix ID<input id="uid" placeholder="@ama:example.org" required></label>
+    <label>Password<input id="pw" type="password" required></label>
+    <button>Sign in</button><p class="error ${error?"":"hidden"}">${esc(error)}</p></form>
+    <small>Development milestone: token persistence still requires production hardening.</small>
+  </section></main>`;
+  document.querySelector("#login").onsubmit = async e => {
+    e.preventDefault();
+    try {
+      const baseUrl = document.querySelector("#hs").value.replace(/\/+$/,"");
+      const auth = createClient({baseUrl});
+      const r = await auth.loginWithPassword(document.querySelector("#uid").value.trim(), document.querySelector("#pw").value);
+      const session = {baseUrl, accessToken:r.access_token, userId:r.user_id, deviceId:r.device_id};
+      save(session); await start(session);
+    } catch (err) { login(err?.message || "Login failed"); }
+  };
 }
-function clearSession() { localStorage.removeItem(SESSION_KEY); }
 
-function loginView(error = "") {
-  app.innerHTML = `
-    <main class="auth-shell">
-      <section class="auth-card">
-        <div class="brand">R</div>
-        <p class="eyebrow">Relay Messenger</p>
-        <h1>Private messaging built for real-world networks.</h1>
-        <p class="muted">Development client connected directly to a Matrix homeserver.</p>
-        <form id="loginForm">
-          <label>Homeserver URL<input id="homeserver" type="url" value="${esc(DEFAULT_HOMESERVER)}" required></label>
-          <label>Matrix user ID<input id="userId" placeholder="@ama:example.org" required></label>
-          <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
-          <button id="loginBtn" type="submit">Sign in</button>
-          <p id="loginError" class="error ${error ? "" : "hidden"}">${esc(error)}</p>
-        </form>
-        <p class="security-note">Development milestone: session tokens are persisted locally for restart testing. Production credential hardening is still required.</p>
-      </section>
-    </main>`;
-  document.querySelector("#loginForm").addEventListener("submit", login);
+async function start(s) {
+  app.innerHTML = `<main class="loading">Opening encrypted session…</main>`;
+  mx = createClient({baseUrl:s.baseUrl, accessToken:s.accessToken, userId:s.userId, deviceId:s.deviceId});
+  await mx.initRustCrypto();
+  mx.on("sync", state => { if (state === "PREPARED") render(); });
+  mx.on("Room.timeline", (_e,r) => { if (!roomId || r?.roomId === roomId) render(); });
+  mx.startClient({initialSyncLimit:50});
+  shell();
 }
 
-async function login(event) {
-  event.preventDefault();
-  const btn = document.querySelector("#loginBtn");
-  btn.disabled = true;
-  const baseUrl = document.querySelector("#homeserver").value.replace(/\/+$/, "");
-  const userId = document.querySelector("#userId").value.trim();
-  const password = document.querySelector("#password").value;
-  try {
-    const authClient = createClient({ baseUrl });
-    const result = await authClient.loginWithPassword(userId, password);
-    const session = {
-      baseUrl,
-      accessToken: result.access_token,
-      userId: result.user_id,
-      deviceId: result.device_id,
-    };
-    saveSession(session);
-    await startSession(session);
-  } catch (err) {
-    loginView(err?.message || "Login failed");
+function shell() {
+  app.innerHTML = `<div class="shell"><aside>
+    <header><div class="brand small">R</div><div><p class="eyebrow">Relay</p><strong>${esc(mx.getUserId())}</strong></div></header>
+    <button id="new">＋ New encrypted chat</button><div id="rooms"></div><button id="logout" class="secondary">Log out</button>
+  </aside><main class="chat"><header id="head"></header><section id="timeline"></section>
+    <form id="send" class="send hidden"><textarea id="msg" rows="1" placeholder="Write a message" required></textarea><button>Send</button></form>
+  </main></div><dialog id="dialog"><form id="create"><h2>New encrypted chat</h2>
+    <label>Matrix ID<input id="invitee" placeholder="@kwame:example.org" required></label>
+    <p id="createError" class="error hidden"></p><div class="actions"><button type="button" id="cancel" class="secondary">Cancel</button><button>Create</button></div>
+  </form></dialog>`;
+  document.querySelector("#new").onclick = () => document.querySelector("#dialog").showModal();
+  document.querySelector("#cancel").onclick = () => document.querySelector("#dialog").close();
+  document.querySelector("#logout").onclick = logout;
+  document.querySelector("#create").onsubmit = createRoom;
+  document.querySelector("#send").onsubmit = send;
+  render();
+}
+
+function rooms() { return (mx?.getRooms() || []).filter(r => r.getMyMembership() === "join"); }
+
+function render() {
+  if (!mx || !document.querySelector("#rooms")) return;
+  const list = document.querySelector("#rooms"); list.innerHTML = "";
+  for (const r of rooms()) {
+    const b = document.createElement("button"); b.className = `room ${r.roomId===roomId?"active":""}`;
+    b.textContent = r.name || r.roomId; b.onclick = () => {roomId=r.roomId; render();}; list.appendChild(b);
   }
+  const r = roomId ? mx.getRoom(roomId) : null;
+  const head=document.querySelector("#head"), tl=document.querySelector("#timeline"), form=document.querySelector("#send");
+  if (!r) { head.innerHTML="<h2>No conversation selected</h2>"; tl.innerHTML='<div class="hero"><div class="brand">R</div><h2>Start a real encrypted conversation.</h2></div>'; form.classList.add("hidden"); return; }
+  head.innerHTML=`<div><p class="eyebrow">Encrypted room</p><h2>${esc(r.name||r.roomId)}</h2></div><span class="secure">E2EE room</span>`;
+  form.classList.remove("hidden");
+  const events=r.getLiveTimeline().getEvents().filter(e=>e.getType()==="m.room.message"&&e.getContent()?.body);
+  tl.innerHTML=events.map(e=>`<article class="message ${e.getSender()===mx.getUserId()?"mine":""}"><p>${esc(e.getContent().body)}</p><small>${esc(e.getSender())}</small></article>`).join("") || '<p class="muted">No messages yet.</p>';
+  tl.scrollTop=tl.scrollHeight;
 }
 
-async function startSession(session) {
-  loadingView("Opening encrypted session…");
-  client = createClient({
-    baseUrl: session.baseUrl,
-    accessToken: session.accessToken,
-    userId: session.userId,
-    deviceId: session.deviceId,
-  });
-
-  // Matrix's maintained Rust crypto implementation. No custom cryptography.
-  await client.initRustCrypto();
-
-  client.on("sync", (state) => {
-    const dot = document.querySelector("#syncDot");
-    const label = document.querySelector("#syncLabel");
-    if (!dot || !label) return;
-    const ready = state === "SYNCING" || state === "PREPARED";
-    dot.classList.toggle("online", ready);
-    label.textContent = ready ? "Synced" : state;
-    if (state === "PREPARED") {
-      renderRooms();
-      renderActiveRoom();
-    }
-  });
-
-  client.on("Room.timeline", (_event, room) => {
-    renderRooms();
-    if (room?.roomId === activeRoomId) renderActiveRoom();
-  });
-
-  client.on("Room.name", renderRooms);
-  client.startClient({ initialSyncLimit: 50 });
-  appView();
+async function createRoom(e) {
+  e.preventDefault(); const err=document.querySelector("#createError");
+  try {
+    const r=await mx.createRoom({is_direct:true, invite:[document.querySelector("#invitee").value.trim()], preset:"trusted_private_chat",
+      initial_state:[{type:"m.room.encryption",state_key:"",content:{algorithm:"m.megolm.v1.aes-sha2"}}]});
+    roomId=r.room_id; document.querySelector("#dialog").close(); render();
+  } catch(x) { err.textContent=x?.message||"Unable to create room"; err.classList.remove("hidden"); }
 }
 
-function loadingView(message) {
-  app.innerHTML = `<main class="loading"><div class="spinner"></div><p>${esc(message)}</p></main>`;
+async function send(e) {
+  e.preventDefault(); const i=document.querySelector("#msg"), text=i.value.trim(); if(!text||!roomId)return; i.value="";
+  try { await mx.sendTextMessage(roomId,text); } catch(x) { i.value=text; alert(x?.message||"Message failed"); }
 }
 
-function appView() {
-  app.innerHTML = `
-    <div class="shell">
-      <aside class="sidebar">
-        <header class="side-head">
-          <div class="brand small">R</div>
-          <div><p class="eyebrow">Relay</p><strong>${esc(client?.getUserId() || "")}</strong></div>
-          <button id="logout" class="ghost">Log out</button>
-        </header>
-        <div class="sync"><span id="syncDot"></span><span id="syncLabel">Connecting…</span></div>
-        <button id="newChat" class="new-chat">＋ New encrypted chat</button>
-        <div id="rooms" class="rooms"></div>
-      </aside>
-      <main class="conversation">
-        <header id="roomHeader" class="room-header"></header>
-        <section id="timeline" class="timeline"></section>
-        <form id="composer" class="composer disabled">
-          <textarea id="message" rows="1" placeholder="Write a message" required></textarea>
-          <button type="submit">Send</button>
-        </form>
-      </main>
-    </div>
-    <dialog id="newChatDialog">
-      <form id="newChatForm">
-        <p class="eyebrow">Encrypted direct chat</p>
-        <h2>Start a conversation</h2>
-        <label>Matrix ID<input id="invitee" placeholder="@kwame:example.org" required></label>
-        <p id="dialogError" class="error hidden"></p>
-        <div class="dialog-actions">
-          <button id="cancelChat" type="button" class="secondary">Cancel</button>
-          <button type="submit">Create</button>
-        </div>
-      </form>
-    </dialog>`;
+async function logout() {
+  try { await mx?.logout(true); } catch {}
+  mx?.stopClient(); mx=null; roomId=null; clear(); login();
+}
 
-  document.querySelector("#logout").addEventListener("click", logout);
-  document.querySelector";
+(async()=>{ const s=load(); if(!s)return login(); try{await start(s);}catch(e){clear();login(`Session restore failed: ${e?.message||"unknown error"}`);} })();
