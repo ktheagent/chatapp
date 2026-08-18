@@ -1,0 +1,10 @@
+{
+  "ok": false,
+  "stage": "account-creation",
+  "accountResult": {
+    "aliceExit": 0,
+    "bobExit": 0
+  },
+  "sourceCommit": "203d6d49f96319e7d844eb0ec072cafa8ec795cb",
+  "workflowRun": "32085020381"
+}
