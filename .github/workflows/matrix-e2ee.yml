@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   e2ee:
@@ -104,6 +104,8 @@ jobs:
             echo "bob_exit=$bob_code"
           } | tee account-output.txt
 
+          printf '{"aliceExit":%s,"bobExit":%s}\n' "$alice_code" "$bob_code" > account-result.json
+
           {
             echo "## Matrix account creation"
             echo '```text'
@@ -119,6 +121,7 @@ jobs:
         env:
           MATRIX_BASE_URL: http://127.0.0.1:8008
           MATRIX_TEST_PASSWORD: RelayCi-Only-Password-42!
+          E2EE_RESULT_FILE: e2ee-result.json
         shell: bash
         run: |
           set +e
@@ -141,10 +144,50 @@ jobs:
         shell: bash
         run: |
           docker logs relay-synapse-e2ee-server > synapse-output.txt 2>&1 || true
-          tail -n 250 synapse-output.txt
-          {
-            echo "## Synapse failure tail"
-            echo '```text'
-            tail -n 250 synapse-output.txt
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          tail -n 120 synapse-output.txt
+
+      - name: Publish sanitized E2EE result to repository
+        if: always() && github.event_name == 'push'
+        shell: bash
+        run: |
+          mkdir -p ci
+
+          if [ -f apps/web/e2ee-result.json ]; then
+            cp apps/web/e2ee-result.json ci/e2ee-last-result.json
+          elif [ -f account-result.json ]; then
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("account-result.json").read_text())
+          Path("ci/e2ee-last-result.json").write_text(
+              json.dumps({
+                  "ok": False,
+                  "stage": "account-creation",
+                  "accountResult": data,
+              }, indent=2) + "\n"
+          )
+          PY
+          else
+            printf '%s\n' '{"ok":false,"stage":"workflow-before-account-result"}' > ci/e2ee-last-result.json
+          fi
+
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path("ci/e2ee-last-result.json")
+          data = json.loads(p.read_text())
+          data["sourceCommit"] = os.environ["GITHUB_SHA"]
+          data["workflowRun"] = os.environ["GITHUB_RUN_ID"]
+          p.write_text(json.dumps(data, indent=2) + "\n")
+          PY
+
+          git config user.name "relay-ci"
+          git config user.email "relay-ci@users.noreply.github.com"
+          git add ci/e2ee-last-result.json
+
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+
+          git commit -m "Record Matrix E2EE CI result [skip ci]"
+          git push origin HEAD:main
