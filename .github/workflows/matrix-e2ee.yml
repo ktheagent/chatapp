@@ -1,0 +1,100 @@
+name: Matrix E2EE Acceptance
+
+on:
+  push:
+    paths:
+      - "apps/web/**"
+      - "infrastructure/**"
+      - ".github/workflows/matrix-e2ee.yml"
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - "infrastructure/**"
+      - ".github/workflows/matrix-e2ee.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2ee:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Install Matrix client dependencies
+        working-directory: apps/web
+        run: npm install --no-audit --no-fund
+
+      - name: Create Synapse data volume
+        run: docker volume create relay-synapse-e2ee
+
+      - name: Generate Synapse configuration
+        run: |
+          docker run --rm \
+            -v relay-synapse-e2ee:/data \
+            -e SYNAPSE_SERVER_NAME=localhost \
+            -e SYNAPSE_REPORT_STATS=no \
+            matrixdotorg/synapse:v1.158.0 generate
+
+      - name: Enable CI-only shared-secret registration
+        run: |
+          docker run --rm \
+            -v relay-synapse-e2ee:/data \
+            alpine:3.22 \
+            sh -c "printf '\nregistration_shared_secret: relay-ci-registration-secret\n' >> /data/homeserver.yaml"
+
+      - name: Start Synapse
+        run: |
+          docker run -d --name relay-synapse-e2ee-server \
+            -v relay-synapse-e2ee:/data \
+            -p 8008:8008 \
+            matrixdotorg/synapse:v1.158.0
+
+      - name: Wait for Matrix client API
+        shell: bash
+        run: |
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:8008/_matrix/client/versions > versions.json; then
+              cat versions.json
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs relay-synapse-e2ee-server
+          exit 1
+
+      - name: Create Alice and Bob test accounts
+        env:
+          TEST_PASSWORD: RelayCi-Only-Password-42!
+        run: |
+          docker exec relay-synapse-e2ee-server register_new_matrix_user \
+            http://localhost:8008 \
+            -c /data/homeserver.yaml \
+            -u alice \
+            -p "$TEST_PASSWORD" \
+            --no-admin
+
+          docker exec relay-synapse-e2ee-server register_new_matrix_user \
+            http://localhost:8008 \
+            -c /data/homeserver.yaml \
+            -u bob \
+            -p "$TEST_PASSWORD" \
+            --no-admin
+
+      - name: Exchange and decrypt a real encrypted message
+        working-directory: apps/web
+        env:
+          MATRIX_BASE_URL: http://127.0.0.1:8008
+          MATRIX_TEST_PASSWORD: RelayCi-Only-Password-42!
+        run: node tests/e2ee-smoke.mjs
+
+      - name: Show Synapse logs on failure
+        if: failure()
+        run: docker logs relay-synapse-e2ee-server || true
