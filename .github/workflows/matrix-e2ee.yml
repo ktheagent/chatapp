@@ -73,28 +73,78 @@ jobs:
       - name: Create Alice and Bob test accounts
         env:
           TEST_PASSWORD: RelayCi-Only-Password-42!
+        shell: bash
         run: |
+          set +e
+
           docker exec relay-synapse-e2ee-server register_new_matrix_user \
             http://localhost:8008 \
             -c /data/homeserver.yaml \
             -u alice \
             -p "$TEST_PASSWORD" \
-            --no-admin
+            --no-admin > alice-output.txt 2>&1
+          alice_code=$?
 
           docker exec relay-synapse-e2ee-server register_new_matrix_user \
             http://localhost:8008 \
             -c /data/homeserver.yaml \
             -u bob \
             -p "$TEST_PASSWORD" \
-            --no-admin
+            --no-admin > bob-output.txt 2>&1
+          bob_code=$?
+
+          {
+            echo "=== Alice registration ==="
+            cat alice-output.txt
+            echo
+            echo "=== Bob registration ==="
+            cat bob-output.txt
+            echo
+            echo "alice_exit=$alice_code"
+            echo "bob_exit=$bob_code"
+          } | tee account-output.txt
+
+          {
+            echo "## Matrix account creation"
+            echo '```text'
+            cat account-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          test "$alice_code" -eq 0
+          test "$bob_code" -eq 0
 
       - name: Exchange and decrypt a real encrypted message
         working-directory: apps/web
         env:
           MATRIX_BASE_URL: http://127.0.0.1:8008
           MATRIX_TEST_PASSWORD: RelayCi-Only-Password-42!
-        run: node tests/e2ee-smoke.mjs
+        shell: bash
+        run: |
+          set +e
+          node tests/e2ee-smoke.mjs > e2ee-output.txt 2>&1
+          code=$?
+          cat e2ee-output.txt
+          {
+            echo "## E2EE acceptance diagnostics"
+            echo
+            echo "**Exit code:** $code"
+            echo
+            echo '```text'
+            cat e2ee-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
 
       - name: Show Synapse logs on failure
         if: failure()
-        run: docker logs relay-synapse-e2ee-server || true
+        shell: bash
+        run: |
+          docker logs relay-synapse-e2ee-server > synapse-output.txt 2>&1 || true
+          tail -n 250 synapse-output.txt
+          {
+            echo "## Synapse failure tail"
+            echo '```text'
+            tail -n 250 synapse-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
