@@ -9,5 +9,8 @@ build/
 coverage/
 *.log
 infrastructure/synapse-data/
+services/*/data/
 .idea/
 .vscode/
+__pycache__/
+*.pyc

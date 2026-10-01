@@ -35,6 +35,18 @@ jobs:
         working-directory: apps/web
         run: npm run build
 
+      - name: Test Matrix web client
+        working-directory: apps/web
+        run: npm test
+
+      - name: Test identity service
+        working-directory: services/identity
+        run: node --test
+
+      - name: Test moderation service
+        working-directory: services/moderation
+        run: node --test
+
       - name: Reject obvious committed secrets
         shell: bash
         run: |
