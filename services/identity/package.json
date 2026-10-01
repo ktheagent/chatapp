@@ -1,0 +1,15 @@
+{
+  "name": "relay-identity-service",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Stable public username directory for Relay, decoupled from Matrix localpart.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test tests"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}
