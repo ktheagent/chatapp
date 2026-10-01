@@ -24,6 +24,10 @@ built-ins only: `node:http` + `node:sqlite`). It exposes:
 - `POST /reports/:id/appeal/resolve` — a moderator upholds or denies the appeal.
 - `GET /health`.
 
+CORS is permissive by default (`Access-Control-Allow-Origin: *`) so the
+browser-based web client can call this service directly. Set
+`RELAY_CORS_ORIGIN` to a specific origin before production.
+
 Every state transition is written to an `audit_events` table. Moderator
 assignment/roles and a review queue UI are not yet implemented.
 

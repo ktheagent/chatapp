@@ -38,6 +38,17 @@ test("health check responds ok", async () => {
   assert.equal(r.status, 200);
 });
 
+test("sends permissive CORS headers so the browser-based web client can call this service", async () => {
+  const r = await fetch(`${baseUrl}/health`);
+  assert.equal(r.headers.get("access-control-allow-origin"), "*");
+});
+
+test("answers CORS preflight requests", async () => {
+  const r = await fetch(`${baseUrl}/reports`, { method: "OPTIONS" });
+  assert.equal(r.status, 204);
+  assert.ok(r.headers.get("access-control-allow-methods")?.includes("POST"));
+});
+
 test("files a report with required fields", async () => {
   const r = await post("/reports", {
     reporterId: "@ama:example.org", targetId: "@bad_actor:example.org", targetType: "user", reasonCode: "spam",

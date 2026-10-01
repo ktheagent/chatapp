@@ -39,6 +39,17 @@ test("health check responds ok", async () => {
   assert.equal(r.body.status, "ok");
 });
 
+test("sends permissive CORS headers so the browser-based web client can call this service", async () => {
+  const r = await fetch(`${baseUrl}/health`);
+  assert.equal(r.headers.get("access-control-allow-origin"), "*");
+});
+
+test("answers CORS preflight requests", async () => {
+  const r = await fetch(`${baseUrl}/usernames/check`, { method: "OPTIONS" });
+  assert.equal(r.status, 204);
+  assert.ok(r.headers.get("access-control-allow-methods")?.includes("POST"));
+});
+
 test("username availability check", async () => {
   const r = await post("/usernames/check", { username: "ama" });
   assert.equal(r.status, 200);

@@ -81,6 +81,15 @@ export function createApp() {
     const clientKey = req.socket.remoteAddress || "unknown";
     const url = new URL(req.url, "http://localhost");
 
+    // Dev-permissive CORS so the web client (served from a different
+    // origin/port by Vite) can call this service directly from the
+    // browser. Tighten Access-Control-Allow-Origin to a real allowlist
+    // before production.
+    res.setHeader("Access-Control-Allow-Origin", process.env.RELAY_CORS_ORIGIN || "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
+
     try {
       if (req.method === "GET" && url.pathname === "/health") {
         return send(res, 200, { status: "ok", service: "identity" });
