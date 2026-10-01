@@ -18,10 +18,12 @@ This repository is the **foundation package**, not a claim of a production-ready
 - Architecture: documented
 - Original UX prototype: runnable locally
 - Policy tests: passing in this environment
-- Matrix SDK integration: interface prepared; SDK package not installed in this environment
-- Matrix homeserver: configuration prepared; not started here because Docker is unavailable
-- Android/iOS builds: not yet compiled
-- E2EE milestone: not yet validated
+- Matrix SDK integration: `apps/web` is a working client (login, registration, encrypted 1:1 + group rooms, text, images/files, voice notes, offline queue, foreground notifications, reporting)
+- Identity service (stable usernames): implemented, tested (`services/identity`)
+- Moderation service (reports/appeals/enforcement): implemented, tested (`services/moderation`)
+- Matrix homeserver: configuration prepared; not started in this environment because nested virtualization (needed by Docker Desktop) is unavailable here
+- Android/iOS builds: not yet compiled (no native build tooling in this environment)
+- E2EE milestone: code path implemented end-to-end; not yet validated against a live homeserver (blocked on the point above)
 - Physical-device testing: not performed
 
 ## Run the prototype
@@ -36,10 +38,33 @@ Then open `http://localhost:8080`.
 
 The prototype intentionally uses local sample data. It demonstrates UX and product behavior only.
 
+## Run the real Matrix web client + backend services
+
+1. Start a Matrix homeserver (`infrastructure/docker-compose.yml`, see `infrastructure/synapse/README.md`) — requires a machine where Docker can actually run.
+2. Start the identity and moderation services:
+   ```bash
+   cd services/identity && PORT=9001 node src/server.js
+   cd services/moderation && PORT=9002 node src/server.js
+   ```
+3. Start the web client:
+   ```bash
+   cd apps/web
+   npm install
+   npm run dev
+   ```
+   See `apps/web/README.md` for environment variables and the two-account acceptance test.
+
 ## Validate foundation
 
 ```bash
 python3 -m unittest discover -s tests -v
+```
+
+Service unit tests:
+
+```bash
+cd services/identity && node --test
+cd services/moderation && node --test
 ```
 
 ## Architecture direction

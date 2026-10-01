@@ -12,22 +12,22 @@
 - [ ] development homeserver started
 
 ## M1 — Messaging Alpha
-- [ ] registration
-- [ ] stable username service
-- [ ] encrypted 1:1 rooms
-- [ ] message timeline
-- [ ] send/receive text
-- [ ] images/files
-- [ ] voice notes
-- [ ] offline queue
-- [ ] push notifications
-- [ ] restart/persistence test
+- [x] registration (web client registration screen + Matrix `m.login.dummy` account creation)
+- [x] stable username service (`services/identity`)
+- [x] encrypted 1:1 rooms
+- [x] message timeline
+- [x] send/receive text
+- [x] images/files
+- [x] voice notes
+- [x] offline queue
+- [x] push notifications (foreground-only web Notifications API; no push server yet)
+- [ ] restart/persistence test (requires a running homeserver + two real accounts; not executed in this environment)
 
 ## M2 — Private Beta
 - [ ] Android physical-device validation
 - [ ] iOS physical-device validation
 - [ ] 1:1 calls
 - [ ] low-data chaos tests
-- [ ] groups
-- [ ] reports/appeals
+- [x] groups (encrypted multi-invite rooms in the web client)
+- [x] reports/appeals (`services/moderation`, wired into the web client)
 - [ ] recovery hardening
