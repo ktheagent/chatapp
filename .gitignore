@@ -12,3 +12,5 @@ infrastructure/synapse-data/
 services/*/data/
 .idea/
 .vscode/
+__pycache__/
+*.pyc

@@ -27,7 +27,9 @@
 - [ ] Android physical-device validation
 - [ ] iOS physical-device validation
 - [ ] 1:1 calls
-- [ ] low-data chaos tests
+- [x] low-data mode (download-on-demand media placeholders, on by default in the web client)
+- [ ] low-data chaos tests (automated network-throttling test harness still needed)
 - [x] groups (encrypted multi-invite rooms in the web client)
 - [x] reports/appeals (`services/moderation`, wired into the web client)
-- [ ] recovery hardening
+- [x] recovery hardening (cross-signing + secret storage via `matrix-js-sdk`'s crypto API, user-triggered "Security" flow in the web client; not yet exercised against a live homeserver in CI)
+- [x] multi-language UI (English, Kiswahili, Français, Hausa, Yorùbá, Nigerian Pidgin)
